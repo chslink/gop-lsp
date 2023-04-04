@@ -1,4 +1,6 @@
+*This is an early release. Some features are not yet fully implemented.*
+
 # Go Plus Language Server Protocol
 
 # 
-github.com/Tencent/LuaHelper
+inspire by github.com/Tencent/LuaHelper
