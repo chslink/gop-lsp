@@ -2,11 +2,13 @@ package langserver
 
 import (
 	"context"
-	"gop-lsp/langserver/check"
-	"gop-lsp/logger"
-	"gop-lsp/utils"
 	"sync"
 	"time"
+
+	"gop-lsp/langserver/check"
+	"gop-lsp/logger"
+	lsp "gop-lsp/protocol"
+	"gop-lsp/utils"
 
 	"github.com/yinfei8/jrpc2"
 	"github.com/yinfei8/jrpc2/handler"
@@ -31,6 +33,8 @@ type LspServer struct {
 
 	// 打开文件的缓冲
 	fileCache *utils.FileMapCache
+
+	dir *check.DirManager
 
 	// // 所有文件的诊断错误信息, 静态的
 	// fileErrorMap map[string][]common.CheckError
@@ -60,6 +64,7 @@ func CreateLspServer() *LspServer {
 		server:         nil,
 		project:        nil,
 		fileCache:      utils.CreateFileMapCache(),
+		dir:            check.CreateDirManager(),
 		colorTime:      0,
 		changeConfFlag: false,
 	}
@@ -69,43 +74,43 @@ func CreateLspServer() *LspServer {
 
 // CreateServer 创建server
 func CreateServer() *jrpc2.Server {
-	lspServer := CreateLspServer()
+	server := CreateLspServer()
 
-	lspServer.server = jrpc2.NewServer(handler.Map{
-		"initialize":             handler.New(lspServer.Initialize),
-		"initialized":            handler.New(lspServer.Initialized),
-		"textDocument/didChange": handler.New(lspServer.TextDocumentDidChange),
-		"textDocument/didSave":   handler.New(lspServer.TextDocumentDidSave),
-		"textDocument/didOpen":   handler.New(lspServer.TextDocumentDidOpen),
-		"textDocument/didClose":  handler.New(lspServer.TextDocumentDidClose),
-		// "textDocument/definition":        handler.New(lspServer.TextDocumentDefine),
-		// "textDocument/hover":             handler.New(lspServer.TextDocumentHover),
-		// "textDocument/references":        handler.New(lspServer.TextDocumentReferences),
-		// "textDocument/documentSymbol":    handler.New(lspServer.TextDocumentSymbol),
-		// "textDocument/rename":            handler.New(lspServer.TextDocumentRename),
-		// "textDocument/documentHighlight": handler.New(lspServer.TextDocumentHighlight),
-		// "textDocument/signatureHelp":     handler.New(lspServer.TextDocumentSignatureHelp),
-		// "textDocument/documentColor":     handler.New(lspServer.TextDocumentColor),
-		// "textDocument/codeLens":          handler.New(lspServer.TextDocumentCodeLens),
-		// "textDocument/documentLink":      handler.New(lspServer.TextDocumentdocumentLink),
-		// "textDocument/completion":        handler.New(lspServer.TextDocumentComplete),
-		// "completionItem/resolve":         handler.New(lspServer.TextDocumentCompleteResolve),
-		// "workspace/didChangeConfiguration":    handler.New(lspServer.ChangeConfiguration),
-		// "workspace/didChangeWorkspaceFolders": handler.New(lspServer.WorkspaceChangeWorkspaceFolders),
-		// "workspace/didChangeWatchedFiles":     handler.New(lspServer.WorkspaceChangeWatchedFiles),
-		// "workspace/symbol":                    handler.New(lspServer.WorkspaceSymbolRequest),
-		// "luahelper/getVarColor":               handler.New(lspServer.TextDocumentGetVarColor),
-		// "luahelper/getOnlineReq":              handler.New(lspServer.GetOnlineReq),
-		// "$/cancelRequest": handler.New(lspServer.CancelRequest),
-		"shutdown": handler.New(lspServer.Shutdown),
-		"exit":     handler.New(lspServer.Exit),
+	server.server = jrpc2.NewServer(handler.Map{
+		"initialize":              handler.New(server.Initialize),
+		"initialized":             handler.New(server.Initialized),
+		"textDocument/didChange":  handler.New(server.TextDocumentDidChange),
+		"textDocument/didSave":    handler.New(server.TextDocumentDidSave),
+		"textDocument/didOpen":    handler.New(server.TextDocumentDidOpen),
+		"textDocument/didClose":   handler.New(server.TextDocumentDidClose),
+		"textDocument/definition": handler.New(server.TextDocumentDefine),
+		// "textDocument/hover":             handler.New(server.TextDocumentHover),
+		// "textDocument/references":        handler.New(server.TextDocumentReferences),
+		// "textDocument/documentSymbol":    handler.New(server.TextDocumentSymbol),
+		// "textDocument/rename":            handler.New(server.TextDocumentRename),
+		// "textDocument/documentHighlight": handler.New(server.TextDocumentHighlight),
+		// "textDocument/signatureHelp":     handler.New(server.TextDocumentSignatureHelp),
+		// "textDocument/documentColor":     handler.New(server.TextDocumentColor),
+		"textDocument/codeLens":     handler.New(server.TextDocumentCodeLens),
+		"textDocument/documentLink": handler.New(server.TextDocumentLink),
+		// "textDocument/completion":        handler.New(server.TextDocumentComplete),
+		// "completionItem/resolve":         handler.New(server.TextDocumentCompleteResolve),
+		// "workspace/didChangeConfiguration":    handler.New(server.ChangeConfiguration),
+		// "workspace/didChangeWorkspaceFolders": handler.New(server.WorkspaceChangeWorkspaceFolders),
+		// "workspace/didChangeWatchedFiles":     handler.New(server.WorkspaceChangeWatchedFiles),
+		// "workspace/symbol":                    handler.New(server.WorkspaceSymbolRequest),
+		// "luahelper/getVarColor":               handler.New(server.TextDocumentGetVarColor),
+		// "luahelper/getOnlineReq":              handler.New(server.GetOnlineReq),
+		"$/cancelRequest": handler.New(server.CancelRequest),
+		"shutdown":        handler.New(server.Shutdown),
+		"exit":            handler.New(server.Exit),
 	}, &jrpc2.ServerOptions{
 		AllowPush:   true,
 		Concurrency: 4,
 		Logger:      logger.Logger,
 	})
 
-	return lspServer.server
+	return server.server
 }
 
 // getFileCache 获取文件缓冲map
@@ -140,4 +145,45 @@ func (l *LspServer) Exit(ctx context.Context) error {
 // getAllProject 获取CheckProject
 func (l *LspServer) getAllProject() *check.AllProject {
 	return l.project
+}
+
+// commFileRequest 通用的文件处理请求
+type commFileRequest struct {
+	result   bool         // 处理结果
+	strFile  string       // 文件名
+	contents []byte       // 文件具体的内容
+	offset   int          // 光标的偏移
+	pos      lsp.Position // 请求的行与列
+}
+
+// beginFileRequest 通用的文件处理请求预处理
+func (l *LspServer) beginFileRequest(url lsp.DocumentURI, pos lsp.Position) (fileRequest commFileRequest) {
+	fileRequest.result = false
+
+	strFile := utils.VscodeURIToString(string(url))
+	project := l.getAllProject()
+	if !project.IsNeedHandle(strFile) {
+		logger.Debug("not need to handle strFile=%s", strFile)
+		return
+	}
+
+	fileCache := l.getFileCache()
+	contents, found := fileCache.GetFileContent(strFile)
+	if !found {
+		logger.Printf("file %s not find contents", strFile)
+		return
+	}
+
+	offset, err := utils.OffsetForPosition(contents, (int)(pos.Line), (int)(pos.Character))
+	if err != nil {
+		logger.Printf("file position error=%s", err.Error())
+		return
+	}
+
+	fileRequest.result = true
+	fileRequest.strFile = strFile
+	fileRequest.contents = contents
+	fileRequest.offset = offset
+	fileRequest.pos = pos
+	return
 }

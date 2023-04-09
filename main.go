@@ -2,14 +2,15 @@ package main
 
 import (
 	"flag"
-	"gop-lsp/langserver"
-	"gop-lsp/logger"
 	"io"
 	"net"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
 	"sync"
+
+	"gop-lsp/langserver"
+	"gop-lsp/logger"
 
 	"github.com/yinfei8/jrpc2/channel"
 )

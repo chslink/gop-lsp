@@ -2,10 +2,11 @@ package langserver
 
 import (
 	"context"
+	"time"
+
 	"gop-lsp/logger"
 	lsp "gop-lsp/protocol"
 	"gop-lsp/utils"
-	"time"
 )
 
 // TextDocumentDidOpen 打开了一个文件的请求
@@ -43,8 +44,8 @@ func (l *LspServer) TextDocumentDidChange(ctx context.Context, vs lsp.DidChangeT
 		logger.Printf("ApplyContentChanges strFile=%s errInfo=%s", strFile, err.Error())
 		return nil
 	}
-	ftime := time.Since(time1).Milliseconds()
-	logger.Debug("TextDocumentDidChang ApplyContentChanges, strFile=%s, time=%d", strFile, ftime)
+	milliseconds := time.Since(time1).Milliseconds()
+	logger.Debug("TextDocumentDidChang ApplyContentChanges, strFile=%s, time=%d", strFile, milliseconds)
 
 	fileCache.SetFileContent(strFile, changeContents)
 	contents, found = fileCache.GetFileContent(strFile)

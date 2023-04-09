@@ -30,6 +30,13 @@ func Init(file string, debug bool) {
 		}
 		output = f
 	}
+	if isDebug {
+		if output != nil {
+			output = io.MultiWriter(output, os.Stdout)
+		} else {
+			output = os.Stdout
+		}
+	}
 	Logger = log.New(output, "[gop-lsp]", log.LstdFlags|log.Lshortfile|log.Lmsgprefix)
 }
 

@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"fmt"
 	"net/url"
 	"strings"
 )
@@ -55,7 +56,7 @@ func StringToVscodeURI(strPath string) string {
 
 // GeConvertPathFormat 文件路径统一为
 func GeConvertPathFormat(strPath string) string {
-	strDir := strings.Replace(string(strPath), "\\", "/", -1)
+	strDir := strings.Replace(strPath, "\\", "/", -1)
 	return strDir
 }
 
@@ -70,4 +71,53 @@ func CompleteFilePathToPreStr(pathFile string) (preStr string) {
 
 	preStr = pathFile[0:seperateIndex]
 	return preStr
+}
+
+// OffsetForPosition Previously used bytes converted to rune.
+// Now use the high bit to determine how many bits the character occupies.
+// posLine (zero-based, from 0)
+func OffsetForPosition(contents []byte, posLine, posCh int) (int, error) {
+	line := 0
+	col := 0
+	offset := 0
+
+	getCharBytes := func(b byte) int {
+		num := 0
+		for b&(1<<uint32(7-num)) != 0 {
+			num++
+		}
+		return num
+	}
+
+	for index := 0; index < len(contents); index++ {
+		if line == posLine && col == posCh {
+			return offset, nil
+		}
+
+		if (line == posLine && col > posCh) || line > posLine {
+			return 0, fmt.Errorf("character %d (zero-based) is beyond line %d boundary (zero-based)", posCh, posLine)
+		}
+
+		curChar := contents[index]
+		if curChar > 127 {
+			curCharBytes := getCharBytes(curChar)
+			index += curCharBytes - 1
+			offset += curCharBytes - 1
+		}
+		offset++
+		if curChar == '\n' {
+			line++
+			col = 0
+		} else {
+			col++
+		}
+
+	}
+	if line == posLine && col == posCh {
+		return offset, nil
+	}
+	if line == 0 {
+		return 0, fmt.Errorf("character %d (zero-based) is beyond first line boundary", posCh)
+	}
+	return 0, fmt.Errorf("file only has %d lines", line+1)
 }

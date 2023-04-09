@@ -2,8 +2,10 @@ package langserver
 
 import (
 	"context"
+
 	"gop-lsp/logger"
 	lsp "gop-lsp/protocol"
+	"gop-lsp/utils"
 )
 
 // InitializeParams 初始化参数
@@ -14,7 +16,12 @@ type InitializeParams struct {
 
 // Initialize lsp初始化函数
 func (l *LspServer) Initialize(ctx context.Context, vs InitializeParams) (lsp.InitializeResult, error) {
-	logger.Debug("test init")
+
+	utils.InitialRootURIAndPath(string(vs.RootURI), vs.RootPath)
+	logger.Debugf("Initialize ..., rootDir=%s, rootUri=%s", vs.RootPath, vs.RootURI)
+	vscodeRoot := utils.VscodeURIToString(string(vs.RootURI))
+	l.dir.SetVSRootDir(vscodeRoot)
+
 	return lsp.InitializeResult{
 		Capabilities: lsp.ServerCapabilities{
 			InnerServerCapabilities: lsp.InnerServerCapabilities{
@@ -59,6 +66,23 @@ func (l *LspServer) Initialize(ctx context.Context, vs InitializeParams) (lsp.In
 	}, nil
 }
 
+func (l *LspServer) initialCheckProject(ctx context.Context, workspaceFolderNum int, workspaceFolder []lsp.WorkspaceFolder) {
+	l.dir.InitMainDir()
+
+	for _, oneFloder := range workspaceFolder {
+		logger.Debugf("floder=%s", oneFloder.URI)
+
+		folderPath := utils.VscodeURIToString(oneFloder.URI)
+		// 若增加的是当前workspace 文件夹中包含的子文件夹， 则不需要做任何处理
+		if l.dir.IsDirExistWorkspace(folderPath) {
+			logger.Debugf("current added dir=%s has existed in the workspaceFolder, not need analysis", folderPath)
+			continue
+		}
+		l.dir.PushOneSubDir(folderPath)
+	}
+
+}
+
 // InitializedParams 初始化参数
 type InitializedParams struct {
 	Settings interface{} `json:"settings"`
@@ -67,7 +91,7 @@ type InitializedParams struct {
 // Initialized 初始化
 func (l *LspServer) Initialized(ctx context.Context, initialParam InitializedParams) error {
 	logger.Debug("Initialized")
-	// 获取所有的诊断错误
+	// todo 获取所有的诊断错误
 	// l.GetAllDiagnostics(ctx)
 	return nil
 }

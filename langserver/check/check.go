@@ -43,3 +43,10 @@ type AllProject struct {
 	// // 整体分析的阶段数
 	// checkTerm results.CheckTerm
 }
+
+// IsNeedHandle 给一个文件名，判断是否要进行处理
+func (a *AllProject) IsNeedHandle(strFile string) bool {
+	// todo  判断该文件是否是忽略处理的 暂时处理所有文件
+
+	return true
+}
