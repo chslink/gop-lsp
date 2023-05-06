@@ -1,0 +1,10 @@
+import "strings"
+
+	func test(){
+		s2 := "s2"
+		s2 = strings.Split(s2,",")
+		println s2
+	}
+	
+	S := "test"
+	println S

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"gop-lsp/langserver/definition"
 	"gop-lsp/logger"
 	lsp "gop-lsp/protocol"
 
@@ -35,12 +36,13 @@ func (l *LspServer) TextDocumentDefine(ctx context.Context, vs lsp.TextDocumentP
 		return
 	}
 	// 3. 在 AST 中查找符号
-	pos := fset.Position(token.Pos(fileRequest.offset))
-	ident, _ := findIdentAtPosition(file, pos)
+	typeInfo := definition.NewTypeInfo()
+	typeInfo.Analyze(file, fset)
+	// ident, _ := findIdentAtPosition(file, pos)
 
 	// 4. 查找符号定义 (具体实现可能需要调整)
-	obj := findDefinition(ident)
-	if obj == nil {
+	obj, err := typeInfo.FindDefinitionPos(fileRequest.offset)
+	if err != nil || obj == nil {
 		return nil, fmt.Errorf("symbol not found")
 	}
 
@@ -49,8 +51,8 @@ func (l *LspServer) TextDocumentDefine(ctx context.Context, vs lsp.TextDocumentP
 	location := lsp.Location{
 		URI: vs.TextDocument.URI,
 		Range: lsp.Range{
-			Start: lsp.Position{Line: uint32(definitionPos.Line - 1), Character: uint32(definitionPos.Column)},
-			End:   lsp.Position{Line: uint32(definitionPos.Line - 1), Character: uint32(definitionPos.Column + len(obj.Name))},
+			Start: lsp.Position{Line: uint32(definitionPos.Line - 1), Character: uint32(definitionPos.Column) - 1},
+			End:   lsp.Position{Line: uint32(definitionPos.Line - 1), Character: uint32(definitionPos.Column + len(obj.Name) - 1)},
 		},
 	}
 
@@ -90,12 +92,5 @@ func posIsValid(pos token.Position, startPos, endPos token.Pos) bool {
 	posOffset := pos.Offset
 	startOffset := int(startPos)
 	endOffset := int(endPos)
-	return posOffset >= startOffset && posOffset < endOffset
-}
-
-func findDefinition(ident *ast.Ident) *ast.Object {
-	// TODO: 在这里实现查找符号定义的逻辑
-	// ...
-
-	return nil
+	return posOffset >= startOffset && posOffset <= endOffset
 }

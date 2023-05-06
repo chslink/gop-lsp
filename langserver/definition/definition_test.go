@@ -5,7 +5,6 @@ import (
 	"log"
 	"testing"
 
-	"github.com/goplus/gop/ast"
 	"github.com/goplus/gop/parser"
 	"github.com/goplus/gop/token"
 )
@@ -13,20 +12,17 @@ import (
 func TestDefinition(t *testing.T) {
 
 	src := `
-		
-	
-	
+	import "strings"
+
 	func test(){
 		s2 := "s2"
+		s2 = strings.Split(s2,",")
 		println s2
 	}
 	
 	S := "test"
 	println S
-		
-		
-
-		
+			
 	`
 
 	fset := token.NewFileSet()
@@ -36,16 +32,9 @@ func TestDefinition(t *testing.T) {
 	}
 
 	typeInfo := NewTypeInfo()
-	typeInfo.analyze(file, fset)
+	typeInfo.Analyze(file, fset)
+	obj, err := typeInfo.FindDefinitionPos(116)
+	fmt.Println(err)
+	fmt.Println(obj)
 
-	ast.Inspect(file, func(n ast.Node) bool {
-		if ident, ok := n.(*ast.Ident); ok {
-			def := typeInfo.findDefinition(ident)
-			pos := fset.Position(ident.Pos())
-			if def != nil {
-				fmt.Printf("Found identifier '%s' at line %d, column %d with type '%v'\n", ident.Name, pos.Line, pos.Column, def)
-			}
-		}
-		return true
-	})
 }

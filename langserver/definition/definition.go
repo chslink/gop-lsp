@@ -2,6 +2,7 @@ package definition
 
 import (
 	"bytes"
+	"fmt"
 	"go/printer"
 	"path"
 	"strings"
@@ -29,6 +30,8 @@ type ImportedPkg struct {
 type TypeInfo struct {
 	Defs         map[*ast.Ident]*GopObject
 	ImportedPkgs map[string]*ImportedPkg
+	file         *ast.File
+	fset         *token.FileSet
 }
 
 func NewTypeInfo() *TypeInfo {
@@ -42,11 +45,40 @@ func (ti *TypeInfo) findDefinition(ident *ast.Ident) *GopObject {
 	if ti == nil || ident == nil {
 		return nil
 	}
-
+	fmt.Println(ti.Defs)
 	return ti.Defs[ident]
 }
 
-func (ti *TypeInfo) analyze(file *ast.File, fset *token.FileSet) {
+func (ti *TypeInfo) FindDefinitionPos(pos int) (*ast.Object, error) {
+	var foundIdent *ast.Ident
+
+	ast.Inspect(ti.file, func(n ast.Node) bool {
+		if n == nil {
+			return false
+		}
+
+		if ident, ok := n.(*ast.Ident); ok {
+			identPos := ident.Pos()
+			identEnd := ident.End()
+			// fmt.Printf("%d %d\n", identPos, identEnd)
+			if posIsValid(pos, identPos, identEnd) {
+				foundIdent = ident
+				return false
+			}
+		}
+		return true
+
+	})
+	if foundIdent == nil {
+		return nil, fmt.Errorf("ident not found")
+	}
+	return foundIdent.Obj, nil
+	// return ti.FindDefinition(foundIdent), nil
+}
+
+func (ti *TypeInfo) Analyze(file *ast.File, fset *token.FileSet) {
+	ti.file = file
+	ti.fset = fset
 	ast.Inspect(file, func(n ast.Node) bool {
 		switch v := n.(type) {
 		// Handle imports
@@ -87,7 +119,7 @@ func (ti *TypeInfo) analyze(file *ast.File, fset *token.FileSet) {
 			if v.Type.Params != nil {
 				for _, field := range v.Type.Params.List {
 					paramType := exprToString(field.Type)
-					for _ = range field.Names {
+					for range field.Names {
 						params = append(params, paramType)
 					}
 				}
@@ -98,7 +130,7 @@ func (ti *TypeInfo) analyze(file *ast.File, fset *token.FileSet) {
 			if v.Type.Results != nil {
 				for _, field := range v.Type.Results.List {
 					resultType := exprToString(field.Type)
-					for _ = range field.Names {
+					for range field.Names {
 						results = append(results, resultType)
 					}
 				}
@@ -143,7 +175,7 @@ func (ti *TypeInfo) analyze(file *ast.File, fset *token.FileSet) {
 					if methodType.Params != nil {
 						for _, field := range methodType.Params.List {
 							paramType := exprToString(field.Type)
-							for _ = range field.Names {
+							for range field.Names {
 								params = append(params, paramType)
 							}
 						}
@@ -154,7 +186,7 @@ func (ti *TypeInfo) analyze(file *ast.File, fset *token.FileSet) {
 					if methodType.Results != nil {
 						for _, field := range methodType.Results.List {
 							resultType := exprToString(field.Type)
-							for _ = range field.Names {
+							for range field.Names {
 								results = append(results, resultType)
 							}
 						}
@@ -182,4 +214,14 @@ func exprToString(expr ast.Expr) string {
 	var buf bytes.Buffer
 	printer.Fprint(&buf, token.NewFileSet(), expr)
 	return buf.String()
+}
+
+func posIsValid(pos int, startPos, endPos token.Pos) bool {
+	if !startPos.IsValid() || !endPos.IsValid() {
+		return false
+	}
+	// posOffset := pos.Offset
+	startOffset := int(startPos)
+	endOffset := int(endPos)
+	return pos >= startOffset && pos < endOffset
 }

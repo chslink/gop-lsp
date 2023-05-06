@@ -5,3 +5,7 @@ func test()  {
 func testN(){
 	test()
 }
+
+var s string 
+
+fmt.Print(s)
